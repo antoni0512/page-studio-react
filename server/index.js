@@ -15,12 +15,17 @@ app.use(express.json());
 
 // Ensure uploads folder exists
 const uploadsDir = path.join(__dirname, "uploads");
+const distDir = path.join(__dirname, "..", "dist");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Serve uploaded files statically
 app.use("/uploads", express.static(uploadsDir));
+
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -212,6 +217,22 @@ app.post("/api/pages", async (req, res) => {
     client.release();
   }
 });
+
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "API endpoint not found" });
+});
+
+// Render production hosting: serve the Vite build from this same web service.
+// API and uploaded-file routes are registered first so they are not handled by
+// the React single-page application fallback.
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+} else if (process.env.NODE_ENV === "production") {
+  console.warn("Frontend build not found. Run `npm run build` before starting the server.");
+}
 
 // Initialize DB and start listening
 const PORT = process.env.PORT || 5000;
